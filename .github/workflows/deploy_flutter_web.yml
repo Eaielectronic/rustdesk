@@ -1,22 +1,19 @@
 name: Deploy Flutter Web to GitHub Pages
 
 on:
-  # Se déclenche à chaque push sur la branche master
   push:
     branches:
       - master
     paths:
-      # S'active uniquement si le code source de Flutter ou ce fichier est modifié
       - 'flutter/**'
       - '.github/workflows/deploy_flutter_web.yml'
-  # Permet également de lancer l'action manuellement depuis GitHub
   workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Nécessaire pour autoriser l'action à faire un push sur gh-pages
+      contents: write
 
     steps:
       - name: Checkout du dépôt
@@ -27,8 +24,9 @@ jobs:
       - name: Configuration de Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.24.5'
           channel: 'stable'
-          cache: true # Accélère les builds suivants
+          cache: true
 
       - name: Téléchargement des dépendances
         working-directory: ./flutter
@@ -45,9 +43,22 @@ jobs:
           yarn list --pattern "libsodium|libsodium-wrappers"
           yarn build
 
+      - name: Vérifier que le bundle JS existe
+        run: |
+          test -s flutter/web/js/dist/index.js
+          test -s flutter/web/js/dist/vendor.js
+          rm -rf flutter/web/js/node_modules
+
       - name: Compilation de Flutter Web
         working-directory: ./flutter
         run: flutter build web --base-href "/rustdesk/"
+
+      - name: Vérifier le résultat du build
+        run: |
+          test -s flutter/build/web/main.dart.js
+          test -s flutter/build/web/js/dist/index.js
+          test -s flutter/build/web/js/dist/vendor.js
+          touch flutter/build/web/.nojekyll
 
       - name: Déploiement sur GitHub Pages (branche gh-pages)
         uses: peaceiris/actions-gh-pages@v4
