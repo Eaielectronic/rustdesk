@@ -108,6 +108,28 @@
       });
     }
     var scriptLoaded = false;
+    var bootErrorShown = false;
+    function showBootError(message) {
+      if (bootErrorShown) {
+        return;
+      }
+      bootErrorShown = true;
+      var loader = document.querySelector('.loading');
+      if (loader) {
+        loader.remove();
+      }
+      var error = document.createElement('div');
+      error.style.position = 'absolute';
+      error.style.top = '50%';
+      error.style.left = '50%';
+      error.style.transform = 'translate(-50%, -50%)';
+      error.style.color = '#d93025';
+      error.style.maxWidth = '80vw';
+      error.style.fontFamily = 'sans-serif';
+      error.style.textAlign = 'center';
+      error.textContent = message;
+      document.body.append(error);
+    }
     function loadMainDartJs() {
       if (scriptLoaded) {
         return;
@@ -116,10 +138,21 @@
       var scriptTag = document.createElement('script');
       scriptTag.src = 'main.dart.js?v=' + Date.now();
       scriptTag.type = 'application/javascript';
+      scriptTag.onerror = function () {
+        showBootError('Failed to load main.dart.js. Build the Flutter web app first and serve it over HTTP.');
+      };
       document.body.append(scriptTag);
     }
     window.addEventListener('load', loadMainDartJs);
     setTimeout(loadMainDartJs, 1500);
+    setTimeout(function () {
+      if (!window._flutter && document.querySelector('.loading')) {
+        var message = window.init
+          ? 'Web app startup timed out. Check browser console logs for startup errors.'
+          : 'Web core assets are missing. Run the web JS build before opening this page.';
+        showBootError(message);
+      }
+    }, 15000);
   </script>
   <script src="libs/firebase-app.js?8.10.1"></script>
   <script src="libs/firebase-analytics.js?8.10.1"></script>
