@@ -141,7 +141,7 @@ libsodium-wrappers@0.7.15:
   dependencies:
     libsodium "^0.7.15"
 
-libsodium@0.7.15, libsodium@^0.7.15:
+libsodium@^0.7.15, libsodium@0.7.15:
   version "0.7.15"
   resolved "https://registry.npmjs.org/libsodium/-/libsodium-0.7.15.tgz"
   integrity sha512-sZwRknt/tUpE2AwzHq3jEyUU5uvIZHtSssktXq7owd++3CSgn8RGrv6UZJJBpP7+iBghBqe7Z06/2M31rI2NKw==
@@ -239,7 +239,7 @@ ts-proto-descriptors@1.16.0:
     long "^5.2.3"
     protobufjs "^7.2.4"
 
-ts-proto@^1.169.1:
+ts-proto@^1.181.2:
   version "1.181.2"
   resolved "https://registry.npmjs.org/ts-proto/-/ts-proto-1.181.2.tgz"
   integrity sha512-knJ8dtjn2Pd0c5ZGZG8z9DMiD4PUY8iGI9T9tb8DvGdWRMkLpf0WcPO7G+7cmbZyxvNTAG6ci3fybEaFgMZIvg==
