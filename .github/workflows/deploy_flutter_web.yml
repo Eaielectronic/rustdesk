@@ -24,13 +24,22 @@ jobs:
       - name: Configuration de Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'
           channel: 'stable'
+          flutter-version: '3.44.x'
           cache: true
 
       - name: Téléchargement des dépendances
         working-directory: ./flutter
         run: flutter pub get
+
+      - name: Patch qr_code_scanner pour le web (Flutter 3.44)
+        run: |
+          QR_WEB="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev/qr_code_scanner-1.0.1/lib/src/web/flutter_qr_web.dart"
+          if ! grep -qF "dart:ui_web" "$QR_WEB"; then
+            sed -i "s|import 'dart:ui' as ui;|import 'dart:ui' as ui; import 'dart:ui_web' as ui_web;|" "$QR_WEB"
+          fi
+          sed -i "s|ui\.platformViewRegistry|ui_web.platformViewRegistry|g" "$QR_WEB"
+          grep -qF "ui_web.platformViewRegistry" "$QR_WEB"
 
       - name: Install protobuf-compiler
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -40,7 +49,6 @@ jobs:
         run: |
           set -euxo pipefail
           yarn install --frozen-lockfile --non-interactive
-          yarn list --pattern "libsodium|libsodium-wrappers"
           yarn build
 
       - name: Vérifier que le bundle JS existe
@@ -51,7 +59,7 @@ jobs:
 
       - name: Compilation de Flutter Web
         working-directory: ./flutter
-        run: flutter build web --base-href "/rustdesk/"
+        run: flutter build web --release --base-href "/rustdesk/"
 
       - name: Vérifier le résultat du build
         run: |
