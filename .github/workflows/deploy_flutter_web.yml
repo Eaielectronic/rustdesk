@@ -32,6 +32,9 @@ jobs:
         working-directory: ./flutter
         run: flutter pub get
 
+      - name: Install protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
       - name: Build Web JS bundle
         working-directory: ./flutter/web/js
         run: |
