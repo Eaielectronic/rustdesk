@@ -192,8 +192,10 @@
     }
     window.addEventListener('load', loadMainDartJs);
     window.addEventListener('error', function (event) {
-      bootLog('window error', event.message || event.type);
-    });
+      var t = event.target;
+      var src = (t && (t.src || t.href)) || '';
+      bootLog('window error', (event.message || event.type) + ' ' + src + ' ' + (event.filename || '') + ':' + (event.lineno || ''));
+    }, true);
     window.addEventListener('unhandledrejection', function (event) {
       bootLog('unhandled rejection', event.reason || 'unknown reason');
     });
