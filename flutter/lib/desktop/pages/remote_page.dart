@@ -1040,6 +1040,7 @@ class _RemotePageState extends State<RemotePage>
           ],
         ),
       ),
+      ),
     );
   }
 
