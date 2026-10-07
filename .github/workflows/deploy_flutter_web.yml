@@ -66,6 +66,9 @@ jobs:
           test -s flutter/build/web/main.dart.js
           test -s flutter/build/web/js/dist/index.js
           test -s flutter/build/web/js/dist/vendor.js
+          # Ces fichiers feraient ignorer js/dist par git lors du déploiement
+          find flutter/build/web -name .gitignore -delete
+          find flutter/build/web -name .gitattributes -delete
           touch flutter/build/web/.nojekyll
 
       - name: Déploiement sur GitHub Pages (branche gh-pages)
