@@ -40,7 +40,9 @@ jobs:
       - name: Build Web JS bundle
         working-directory: ./flutter/web/js
         run: |
-          yarn install
+          set -euxo pipefail
+          yarn install --frozen-lockfile --non-interactive
+          yarn list --pattern "libsodium|libsodium-wrappers"
           yarn build
 
       - name: Compilation de Flutter Web
