@@ -108,13 +108,20 @@
       });
     }
     var bootStartAt = Date.now();
+    var bootLogs = [];
     function bootLog(step, detail) {
       var elapsed = Date.now() - bootStartAt;
-      if (detail === undefined) {
-        console.log('[RustDesk web boot +' + elapsed + 'ms] ' + step);
-      } else {
-        console.log('[RustDesk web boot +' + elapsed + 'ms] ' + step, detail);
+      var line = '[RustDesk web boot +' + elapsed + 'ms] ' + step;
+      if (detail !== undefined) {
+        try {
+          line += ' ' + (typeof detail === 'string' ? detail : JSON.stringify(detail));
+        } catch (_) { }
       }
+      bootLogs.push(line);
+      if (bootLogs.length > 200) {
+        bootLogs.shift();
+      }
+      console.log(line);
     }
     bootLog('bootstrap script loaded');
     var scriptLoaded = false;
@@ -139,7 +146,29 @@
       error.style.maxWidth = '80vw';
       error.style.fontFamily = 'sans-serif';
       error.style.textAlign = 'center';
-      error.textContent = message;
+      error.style.background = 'white';
+      error.style.padding = '12px';
+      error.style.border = '1px solid #f3c5c5';
+      error.style.borderRadius = '6px';
+      var title = document.createElement('div');
+      title.style.marginBottom = '8px';
+      title.textContent = message;
+      error.append(title);
+      var details = document.createElement('details');
+      details.open = true;
+      var summary = document.createElement('summary');
+      summary.textContent = 'Startup diagnostics';
+      summary.style.cursor = 'pointer';
+      details.append(summary);
+      var logs = document.createElement('pre');
+      logs.style.whiteSpace = 'pre-wrap';
+      logs.style.textAlign = 'left';
+      logs.style.marginTop = '8px';
+      logs.style.maxHeight = '40vh';
+      logs.style.overflow = 'auto';
+      logs.textContent = bootLogs.length > 0 ? bootLogs.join('\n') : 'No diagnostics captured.';
+      details.append(logs);
+      error.append(details);
       document.body.append(error);
     }
     function loadMainDartJs() {
