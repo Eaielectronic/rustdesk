@@ -15,6 +15,7 @@ import '../../common.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/toolbar.dart';
 import '../../models/model.dart';
+import '../../models/chat_model.dart';
 import '../../models/input_model.dart';
 import '../../models/platform_model.dart';
 import '../../common/shared_state.dart';
@@ -132,6 +133,12 @@ class _RemotePageState extends State<RemotePage>
   bool _waylandKeyboardModeNormalizing = false;
 
   SessionID get sessionId => _ffi.sessionId;
+  bool _showQuickSendBar = isWeb;
+  bool _showPcKeyboard = false;
+  bool _kbdShift = false;
+  bool _kbdSymbols = false;
+  bool _kbdAzerty = true;
+  final TextEditingController _quickSendController = TextEditingController();
 
   _RemotePageState(String id) {
     _initStates(id);
@@ -671,6 +678,7 @@ class _RemotePageState extends State<RemotePage>
     _ffi.imageModel.disposeImage();
     _ffi.cursorModel.disposeImages();
     _rawKeyFocusNode.dispose();
+    _quickSendController.dispose();
     if (closeSession) {
       clearWaylandKeyboardPromptSuppressedForConnection(sessionId.toString());
     }
@@ -779,6 +787,24 @@ class _RemotePageState extends State<RemotePage>
               _ffi.ffiModel.pi.isSet.isFalse ? emptyOverlay() : Offstage(),
             ],
           ),
+          if (isWeb && _showQuickSendBar)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildDesktopQuickSendBar(),
+            ),
+          if (isWeb && !_showQuickSendBar)
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: FloatingActionButton.small(
+                backgroundColor: MyTheme.accent,
+                tooltip: translate('Quick send bar'),
+                onPressed: () => setState(() => _showQuickSendBar = true),
+                child: const Icon(Icons.text_fields, color: Colors.white, size: 20),
+              ),
+            ),
         ],
       );
     }
@@ -811,6 +837,345 @@ class _RemotePageState extends State<RemotePage>
           return bodyWidget();
         }
       }),
+    );
+  }
+
+  Widget _quickActionChip(String label, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white12,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Colors.white24, width: 0.5),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopQuickSendBar() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF202124),
+          border: Border(
+            top: BorderSide(color: Color(0xFF3C4043), width: 1),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black54,
+              blurRadius: 10,
+              offset: Offset(0, -3),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_showPcKeyboard) _buildFullVirtualKeyboard(),
+              if (_showPcKeyboard) const SizedBox(height: 8),
+              Row(
+                children: [
+                  InkWell(
+                    onTap: () => setState(() => _showPcKeyboard = !_showPcKeyboard),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: _showPcKeyboard ? const Color(0xFF1A73E8) : const Color(0xFF303134),
+                        border: Border.all(
+                          color: _showPcKeyboard ? const Color(0xFF8AB4F8) : Colors.white24,
+                          width: 1.2,
+                        ),
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.keyboard,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      _ffi.chatModel.changeCurrentKey(
+                          MessageKey(widget.id, ChatModel.clientModeID));
+                      _ffi.chatModel.toggleChatOverlay();
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF303134),
+                        border: Border.all(color: Colors.white24, width: 1),
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.chat,
+                          color: Colors.white70,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3C4043),
+                        border: Border.all(color: const Color(0xFF5F6368), width: 1),
+                      ),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        controller: _quickSendController,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        cursorColor: const Color(0xFF1A73E8),
+                      autofocus: false,
+                      decoration: InputDecoration(
+                        hintText: translate('Type text to send to remote desktop...'),
+                        hintStyle: const TextStyle(
+                          color: Color(0xFF9AA0A6),
+                          fontSize: 14,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onSubmitted: (val) {
+                        if (val.isNotEmpty) {
+                          bind.sessionInputString(sessionId: sessionId, value: val);
+                          _quickSendController.clear();
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _quickSendController,
+                  builder: (context, value, child) {
+                    final isEmpty = value.text.isEmpty;
+                    return GestureDetector(
+                      onTap: () {
+                        if (isEmpty) {
+                          _ffi.inputModel.inputKey('VK_BACK');
+                        } else {
+                          bind.sessionInputString(sessionId: sessionId, value: value.text);
+                          _quickSendController.clear();
+                        }
+                      },
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: isEmpty ? const Color(0xFF3C4043) : const Color(0xFF1A73E8),
+                          border: isEmpty ? Border.all(color: const Color(0xFF5F6368), width: 1) : null,
+                          boxShadow: isEmpty
+                              ? null
+                              : const [
+                                  BoxShadow(
+                                    color: Color(0x551A73E8),
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                        ),
+                        child: Center(
+                          child: Icon(
+                            isEmpty ? Icons.backspace_outlined : Icons.send_rounded,
+                            color: isEmpty ? Colors.white70 : Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () => setState(() => _showQuickSendBar = false),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: Colors.transparent,
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.close,
+                        color: Colors.white38,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFullVirtualKeyboard() {
+    final pi = _ffi.ffiModel.pi;
+    final isMac = pi.platform == kPeerPlatformMacOS;
+
+    List<List<String>> rows = [];
+    if (_kbdSymbols) {
+       rows = [
+         ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Bksp'],
+         ['!', '@', '#', '\$', '%', '^', '&', '*', '(', ')', '_', '+', 'Enter'],
+         ['~', '`', '|', '\\', '{', '}', '[', ']', ':', ';', '"', '\''],
+         ['Shift', '<', '>', ',', '.', '?', '/', 'Shift']
+       ];
+    } else if (_kbdAzerty) {
+       rows = [
+         ['a', 'z', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', 'Bksp'],
+         ['q', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'Enter'],
+         ['Shift', 'w', 'x', 'c', 'v', 'b', 'n', ',', '?', '.', '/', 'Shift']
+       ];
+    } else {
+       rows = [
+         ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', 'Bksp'],
+         ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'Enter'],
+         ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '?', 'Shift']
+       ];
+    }
+
+    Widget buildRow(List<String> keys) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: keys.map((k) {
+          double? width;
+          if (k == 'Bksp' || k == 'Enter' || k == 'Shift') width = 56;
+
+          String label = k;
+          if (!_kbdSymbols && label.length == 1 && _kbdShift) {
+             label = label.toUpperCase();
+          }
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+            child: _pcKeyBtn(label, () {
+               if (k == 'Shift') {
+                  setState(() => _kbdShift = !_kbdShift);
+               } else if (k == 'Bksp') {
+                  _ffi.inputModel.inputKey('VK_BACK');
+               } else if (k == 'Enter') {
+                  _ffi.inputModel.inputKey('VK_RETURN');
+               } else {
+                  bind.sessionInputString(sessionId: sessionId, value: label);
+                  if (_kbdShift) setState(() => _kbdShift = false);
+               }
+            }, width: width, active: k == 'Shift' && _kbdShift),
+          );
+        }).toList(),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E1E20),
+        border: Border(bottom: BorderSide(color: Color(0xFF3C4043), width: 1)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  _pcKeyBtn(_kbdSymbols ? 'ABC' : '?123', () => setState(() => _kbdSymbols = !_kbdSymbols), width: 60),
+                  const SizedBox(width: 8),
+                  _pcKeyBtn(_kbdAzerty ? 'AZERTY' : 'QWERTY', () => setState(() => _kbdAzerty = !_kbdAzerty), width: 80),
+                ],
+              ),
+              Row(
+                children: [
+                  _pcKeyBtn('Ctrl', () => setState(() => _ffi.inputModel.ctrl = !_ffi.inputModel.ctrl), active: _ffi.inputModel.ctrl, width: 50),
+                  const SizedBox(width: 4),
+                  _pcKeyBtn('Alt', () => setState(() => _ffi.inputModel.alt = !_ffi.inputModel.alt), active: _ffi.inputModel.alt, width: 50),
+                  const SizedBox(width: 4),
+                  _pcKeyBtn(isMac ? 'Cmd' : 'Win', () => setState(() => _ffi.inputModel.command = !_ffi.inputModel.command), active: _ffi.inputModel.command, width: 50),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    onTap: () => setState(() => _showPcKeyboard = false),
+                    child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.keyboard_hide, color: Colors.white54, size: 24)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...rows.map(buildRow),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _pcKeyBtn('Space', () => _ffi.inputModel.inputKey('VK_SPACE'), width: 200),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _pcKeyBtn(String label, VoidCallback onTap,
+      {bool active = false, double? width, IconData? icon}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        width: width,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF1A73E8) : const Color(0xFF2C2D32),
+          border: Border.all(
+            color: active ? const Color(0xFF64B5F6) : Colors.white24,
+            width: 0.8,
+          ),
+        ),
+        child: icon != null
+            ? Icon(icon, color: Colors.white, size: 16)
+            : Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+      ),
     );
   }
 

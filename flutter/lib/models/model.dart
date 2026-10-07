@@ -2124,7 +2124,7 @@ class ViewStyle {
     final h =
         desktop ? kDesktopDefaultDisplayHeight : kMobileDefaultDisplayHeight;
     return ViewStyle(
-      style: '',
+      style: isMobile ? kRemoteViewStyleAdaptive : '',
       width: w.toDouble(),
       height: h.toDouble(),
       displayWidth: w,
@@ -2236,7 +2236,7 @@ class CanvasModel with ChangeNotifier {
   double _y = 0;
   // image scale
   double _scale = 1.0;
-  bool _locked = false;
+  bool _locked = isMobile;
   double _devicePixelRatio = 1.0;
   Size _size = Size.zero;
   // the tabbar over the image
@@ -2376,7 +2376,10 @@ class CanvasModel with ChangeNotifier {
   updateSize() => _size = getSize();
 
   updateViewStyle({refreshMousePos = true, notify = true}) async {
-    final style = await bind.sessionGetViewStyle(sessionId: sessionId);
+    var style = await bind.sessionGetViewStyle(sessionId: sessionId);
+    if (isMobile && (style == null || style.isEmpty)) {
+      style = kRemoteViewStyleAdaptive;
+    }
     if (style == null) {
       return;
     }
@@ -2702,6 +2705,7 @@ class CanvasModel with ChangeNotifier {
   }
 
   panX(double dx) {
+    if (_locked) return;
     _x += dx;
     if (isMobile) {
       isMobileCanvasChanged = true;
@@ -2719,6 +2723,7 @@ class CanvasModel with ChangeNotifier {
   }
 
   panY(double dy) {
+    if (_locked) return;
     _y += dy;
     if (isMobile) {
       isMobileCanvasChanged = true;
@@ -2728,6 +2733,7 @@ class CanvasModel with ChangeNotifier {
 
   // mobile only
   updateScale(double v, Offset focalPoint) {
+    if (_locked) return;
     if (parent.target?.imageModel.image == null) return;
     final s = _scale;
     _scale *= v;
@@ -3368,11 +3374,12 @@ class CursorModel with ChangeNotifier {
     var cy = r.center.dy;
     var tryMoveCanvasX = false;
     final displayRect = parent.target?.ffiModel.rect;
+    final canvasLocked = parent.target?.canvasModel.locked ?? false;
     if (dx > 0) {
       final maxCanvasCanMove = _displayOriginX +
           (displayRect?.width ?? 1280) -
           r.right.roundToDouble();
-      tryMoveCanvasX = _x + dx > cx && maxCanvasCanMove > 0;
+      tryMoveCanvasX = !canvasLocked && _x + dx > cx && maxCanvasCanMove > 0;
       if (tryMoveCanvasX) {
         dx = min(dx, maxCanvasCanMove);
       } else {
@@ -3381,7 +3388,7 @@ class CursorModel with ChangeNotifier {
       }
     } else if (dx < 0) {
       final maxCanvasCanMove = _displayOriginX - r.left.roundToDouble();
-      tryMoveCanvasX = _x + dx < cx && maxCanvasCanMove < 0;
+      tryMoveCanvasX = !canvasLocked && _x + dx < cx && maxCanvasCanMove < 0;
       if (tryMoveCanvasX) {
         dx = max(dx, maxCanvasCanMove);
       } else {
@@ -3394,7 +3401,7 @@ class CursorModel with ChangeNotifier {
       final mayCanvasCanMove = _displayOriginY +
           (displayRect?.height ?? 720) -
           r.bottom.roundToDouble();
-      tryMoveCanvasY = _y + dy > cy && mayCanvasCanMove > 0;
+      tryMoveCanvasY = !canvasLocked && _y + dy > cy && mayCanvasCanMove > 0;
       if (tryMoveCanvasY) {
         dy = min(dy, mayCanvasCanMove);
       } else {
@@ -3403,7 +3410,7 @@ class CursorModel with ChangeNotifier {
       }
     } else if (dy < 0) {
       final mayCanvasCanMove = _displayOriginY - r.top.roundToDouble();
-      tryMoveCanvasY = _y + dy < cy && mayCanvasCanMove < 0;
+      tryMoveCanvasY = !canvasLocked && _y + dy < cy && mayCanvasCanMove < 0;
       if (tryMoveCanvasY) {
         dy = max(dy, mayCanvasCanMove);
       } else {

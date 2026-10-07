@@ -139,41 +139,63 @@ class PlatformFFI {
 
   Future<void> init(String appType) async {
     Completer completer = Completer();
-    context["onInitFinished"] = () {
-      completer.complete();
+    context["onInitFinished"] = ([_]) {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
     };
-    context['dialog'] = (type, title, text) {
+    context['dialog'] = (type, title, text, [_]) {
       final uuid = Uuid();
       msgBox(SessionID(uuid.v4()), type, title, text, '', gFFI.dialogManager);
     };
-    context['loginDialog'] = () {
+    context['loginDialog'] = ([_]) {
       loginDialog();
     };
-    context['closeConnection'] = () {
+    context['closeConnection'] = ([_]) {
       gFFI.dialogManager.dismissAll();
       closeConnection();
     };
-    context.callMethod('init');
+    final res = context.callMethod('init');
+    if (res != null) {
+      try {
+        res.callMethod('then', [
+          ([_]) {
+            if (!completer.isCompleted) completer.complete();
+          },
+          ([_]) {
+            if (!completer.isCompleted) completer.complete();
+          }
+        ]);
+      } catch (_) {}
+    }
     version = getByName('version');
     window.onContextMenu.listen((event) {
       event.preventDefault();
     });
 
-    context['onRegisteredEvent'] = (String message) {
+    context['onRegisteredEvent'] = (dynamic message, [_]) {
       try {
-        Map<String, dynamic> event = json.decode(message);
+        Map<String, dynamic> event = message is Map
+            ? Map<String, dynamic>.from(message)
+            : json.decode(message.toString());
         tryHandle(event);
       } catch (e) {
         print('json.decode fail(): $e');
       }
     };
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!completer.isCompleted) completer.complete();
+      window.document.querySelector('.loading')?.remove();
+    });
     return completer.future;
   }
 
   void setEventCallback(void Function(Map<String, dynamic>) fun) {
-    context["onGlobalEvent"] = (String message) {
+    context["onGlobalEvent"] = (dynamic message, [_]) {
       try {
-        Map<String, dynamic> event = json.decode(message);
+        Map<String, dynamic> event = message is Map
+            ? Map<String, dynamic>.from(message)
+            : json.decode(message.toString());
         fun(event);
       } catch (e) {
         print('json.decode fail(): $e');

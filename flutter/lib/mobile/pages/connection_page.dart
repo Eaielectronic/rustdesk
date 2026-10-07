@@ -66,12 +66,14 @@ class _ConnectionPageState extends State<ConnectionPage> {
     _idFocusNode.addListener(onFocusChanged);
     if (_idController.text.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final lastRemoteId = await bind.mainGetLastRemoteId();
-        if (lastRemoteId != _idController.id) {
-          setState(() {
-            _idController.id = lastRemoteId;
-          });
-        }
+        try {
+          final lastRemoteId = await bind.mainGetLastRemoteId();
+          if (lastRemoteId != _idController.id && mounted) {
+            setState(() {
+              _idController.id = lastRemoteId;
+            });
+          }
+        } catch (_) {}
       });
     }
     Get.put<TextEditingController>(_idEditingController);

@@ -551,6 +551,13 @@ class _GeneralState extends State<_General> {
             ),
           ),
       ],
+      if (isWeb)
+        _OptionCheckBox(
+          context,
+          "Force mobile mode",
+          "web-force-mobile",
+          isServer: false,
+        ),
       if (!isWeb && !bind.isCustomClient())
         _OptionCheckBox(
           context,

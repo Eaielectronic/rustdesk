@@ -1741,16 +1741,14 @@ class RustdeskImpl {
   }
 
   bool mainHasValid2FaSync({dynamic hint}) {
-    throw UnimplementedError("mainHasValid2FaSync");
+    return false;
   }
 
   String mainGetHardOption({required String key, dynamic hint}) {
     return mainGetLocalOption(key: key, hint: hint);
   }
 
-  Future<void> mainCheckHwcodec({dynamic hint}) {
-    throw UnimplementedError("mainCheckHwcodec");
-  }
+  Future<void> mainCheckHwcodec({dynamic hint}) async {}
 
   Future<void> sessionRequestNewDisplayInitMsgs(
       {required UuidValue sessionId, required int display, dynamic hint}) {

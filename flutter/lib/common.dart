@@ -57,11 +57,13 @@ final isMacOS = isMacOS_;
 final isLinux = isLinux_;
 final isDesktop = isDesktop_;
 final isWeb = isWeb_;
-final isWebDesktop = isWebDesktop_;
+bool get isWebDesktop => isWebDesktop_;
 final isWebOnWindows = isWebOnWindows_;
 final isWebOnLinux = isWebOnLinux_;
 final isWebOnMacOs = isWebOnMacOS_;
-var isMobile = isAndroid || isIOS;
+bool? _isMobileOverride;
+bool get isMobile => _isMobileOverride ?? (isAndroid || isIOS || (isWeb && !isWebDesktop));
+set isMobile(bool v) => _isMobileOverride = v;
 var version = '';
 int androidVersion = 0;
 
@@ -379,7 +381,8 @@ class MyTheme {
     appBarTheme: AppBarTheme(
       shadowColor: Colors.transparent,
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
+      backgroundColor: Colors.white,
       elevation: 15,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18.0),
@@ -410,7 +413,7 @@ class MyTheme {
     cardColor: grayBg,
     hintColor: Color(0xFFAAAAAA),
     visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarTheme(
+    tabBarTheme: const TabBarThemeData(
       labelColor: Colors.black87,
     ),
     tooltipTheme: tooltipTheme(),
@@ -477,7 +480,8 @@ class MyTheme {
     appBarTheme: AppBarTheme(
       shadowColor: Colors.transparent,
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
+      backgroundColor: Color(0xFF18191E),
       elevation: 15,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18.0),
@@ -511,7 +515,7 @@ class MyTheme {
     ),
     cardColor: Color(0xFF24252B),
     visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarTheme(
+    tabBarTheme: const TabBarThemeData(
       labelColor: Colors.white70,
     ),
     tooltipTheme: tooltipTheme(),
@@ -2691,7 +2695,8 @@ connect(BuildContext context, String id,
         ),
       );
     } else {
-      if (isWeb) {
+      final isMobileView = isMobile || (MediaQuery.of(context).size.width <= 800);
+      if (isWeb && isWebDesktop && !isMobileView) {
         Navigator.push(
           context,
           MaterialPageRoute(

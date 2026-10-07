@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -60,7 +61,7 @@ class RemotePage extends StatefulWidget {
 
 class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Timer? _timer;
-  bool _showBar = !isWebDesktop;
+  bool _showBar = false;
   bool _showGestureHelp = false;
   String _value = '';
   Orientation? _currentOrientation;
@@ -73,7 +74,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   late final StreamSubscription<bool> keyboardSubscription;
   final FocusNode _mobileFocusNode = FocusNode();
   final FocusNode _physicalFocusNode = FocusNode();
-  var _showEdit = false; // use soft keyboard
+  var _showEdit = false;
 
   Worker? _waylandKeyboardGateWorker;
   bool _waylandKeyboardGateInitialized = false;
@@ -83,6 +84,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   final TextEditingController _textController =
       TextEditingController(text: initText);
+  bool _showQuickSendBar = true;
+  final TextEditingController _quickSendController = TextEditingController();
+  bool _sidePanelOpen = false;
+  bool _showPcKeyboard = false;
 
   _RemotePageState(String id) {
     initSharedStates(id);
@@ -109,12 +114,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     _physicalFocusNode.requestFocus();
     gFFI.inputModel.listenToMouse(true);
     gFFI.qualityMonitorModel.checkShowQualityMonitor(sessionId);
+    gFFI.canvasModel.setLocked(true);
+    bind.sessionSetViewStyle(sessionId: sessionId, value: kRemoteViewStyleAdaptive);
+    gFFI.canvasModel.updateViewStyle();
     keyboardSubscription =
         keyboardVisibilityController.onChange.listen(onSoftKeyboardChanged);
     gFFI.chatModel
         .changeCurrentKey(MessageKey(widget.id, ChatModel.clientModeID));
     _blockableOverlayState.applyFfi(gFFI);
     gFFI.imageModel.addCallbackOnFirstImage((String peerId) {
+      bind.sessionSetViewStyle(sessionId: sessionId, value: kRemoteViewStyleAdaptive);
+      gFFI.canvasModel.updateViewStyle();
+      gFFI.canvasModel.setLocked(true);
       gFFI.recordingModel
           .updateStatus(bind.sessionGetIsRecording(sessionId: gFFI.sessionId));
       if (gFFI.recordingModel.start) {
@@ -160,6 +171,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     await gFFI.invokeMethod("enable_soft_keyboard", true);
     _mobileFocusNode.dispose();
     _physicalFocusNode.dispose();
+    _quickSendController.dispose();
     clearWaylandKeyboardPromptSuppressedForConnection(sessionId.toString());
     _waylandKeyboardGateWorker?.dispose();
     inputModel.keyboardInputAllowed = true;
@@ -433,99 +445,750 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     });
   }
 
-  Widget _bottomWidget() => _showGestureHelp
-      ? getGestureHelp()
-      : (_showBar && gFFI.ffiModel.pi.displays.isNotEmpty
-          ? getBottomAppBar()
-          : Offstage());
+  Widget _bottomWidget() {
+    if (_showGestureHelp) return getGestureHelp();
+    return _buildGoogleBottomBar();
+  }
+
+  Widget _buildGoogleBottomBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF202124),
+        border: Border(
+          top: BorderSide(color: Color(0xFF3C4043), width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 10,
+            offset: Offset(0, -3),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.only(
+        left: 10,
+        right: 10,
+        top: 8,
+        bottom: 8 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_showPcKeyboard) _buildPcKeyboardShelf(),
+            if (_showPcKeyboard) const SizedBox(height: 8),
+            Row(
+              children: [
+                InkWell(
+                  onTap: () => setState(() => _showPcKeyboard = !_showPcKeyboard),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _showPcKeyboard ? const Color(0xFF1A73E8) : const Color(0xFF303134),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _showPcKeyboard ? const Color(0xFF8AB4F8) : Colors.white24,
+                        width: 1.2,
+                      ),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.keyboard,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: openKeyboard,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF303134),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24, width: 1),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.keyboard_alt_outlined,
+                        color: Colors.white70,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(23),
+                      border: Border.all(color: const Color(0xFFDADCE0), width: 1),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      controller: _quickSendController,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      cursorColor: const Color(0xFF1A73E8),
+                      autofocus: false,
+                      decoration: InputDecoration(
+                        hintText: translate('Type text to send...'),
+                        hintStyle: const TextStyle(
+                          color: Color(0xFF9AA0A6),
+                          fontSize: 14,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onSubmitted: (val) {
+                        if (val.isNotEmpty) {
+                          bind.sessionInputString(sessionId: sessionId, value: val);
+                          _quickSendController.clear();
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _quickSendController,
+                  builder: (context, value, child) {
+                    final isEmpty = value.text.isEmpty;
+                    return GestureDetector(
+                      onTap: () {
+                        if (isEmpty) {
+                          inputModel.inputKey('VK_BACK');
+                        } else {
+                          bind.sessionInputString(sessionId: sessionId, value: value.text);
+                          _quickSendController.clear();
+                        }
+                      },
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: isEmpty ? const Color(0xFF3C4043) : const Color(0xFF1A73E8),
+                          shape: BoxShape.circle,
+                          border: isEmpty ? Border.all(color: const Color(0xFF5F6368), width: 1) : null,
+                          boxShadow: isEmpty
+                              ? null
+                              : const [
+                                  BoxShadow(
+                                    color: Color(0x551A73E8),
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                        ),
+                        child: Center(
+                          child: Icon(
+                            isEmpty ? Icons.backspace_outlined : Icons.send_rounded,
+                            color: isEmpty ? Colors.white70 : Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildGoogleActionBtn(Icons.close, () => clientClose(sessionId, gFFI), color: Colors.red[400]),
+                _buildGoogleActionBtn(Icons.tv, () {
+                  setState(() => _showEdit = false);
+                  showOptions(context, widget.id, gFFI.dialogManager);
+                }),
+                _buildGoogleActionBtn(Icons.menu, () => setState(() => _sidePanelOpen = !_sidePanelOpen)),
+                if (gFFI.ffiModel.isPeerAndroid)
+                  _buildGoogleActionBtn(Icons.build, () => gFFI.dialogManager.toggleMobileActionsOverlay(ffi: gFFI)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoogleActionBtn(IconData icon, VoidCallback onTap, {Color? color}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Icon(icon, color: color ?? Colors.white70, size: 26),
+      ),
+    );
+  }
+
+  Widget _buildPcKeyboardShelf() {
+    final pi = gFFI.ffiModel.pi;
+    final isMac = pi.platform == kPeerPlatformMacOS;
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 210),
+      decoration: BoxDecoration(
+        color: const Color(0xFF202124),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF3C4043), width: 1),
+        boxShadow: const [
+          BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, -3)),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.laptop_chromebook, color: Color(0xFF8AB4F8), size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      translate('PC Virtual Keyboard'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    InkWell(
+                      onTap: openKeyboard,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF303134),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.white24, width: 0.8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.smartphone, color: Colors.white70, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              translate('Mobile Keyboard'),
+                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: () => setState(() => _showPcKeyboard = false),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        child: const Icon(Icons.close, color: Colors.white54, size: 18),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _pcKeyBtn('Ctrl', () => setState(() => inputModel.ctrl = !inputModel.ctrl), active: inputModel.ctrl),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Alt', () => setState(() => inputModel.alt = !inputModel.alt), active: inputModel.alt),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Shift', () => setState(() => inputModel.shift = !inputModel.shift), active: inputModel.shift),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn(isMac ? 'Cmd' : 'Win', () => setState(() => inputModel.command = !inputModel.command), active: inputModel.command),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Esc', () => inputModel.inputKey('VK_ESCAPE')),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Tab', () => inputModel.inputKey('VK_TAB')),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Enter', () => inputModel.inputKey('VK_RETURN')),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Bksp', () => inputModel.inputKey('VK_BACK')),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Del', () => inputModel.inputKey('VK_DELETE')),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Ctrl+Alt+Del', () => bind.sessionCtrlAltDel(sessionId: sessionId)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(12, (index) {
+                  final fnName = 'F${index + 1}';
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: _pcKeyBtn(fnName, () => inputModel.inputKey('VK_$fnName')),
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _pcKeyBtn('', () => inputModel.inputKey('VK_LEFT'), icon: Icons.arrow_back),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('', () => inputModel.inputKey('VK_UP'), icon: Icons.arrow_upward),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('', () => inputModel.inputKey('VK_DOWN'), icon: Icons.arrow_downward),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('', () => inputModel.inputKey('VK_RIGHT'), icon: Icons.arrow_forward),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Home', () => inputModel.inputKey('VK_HOME')),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('End', () => inputModel.inputKey('VK_END')),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('PgUp', () => inputModel.inputKey('VK_PRIOR')),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('PgDn', () => inputModel.inputKey('VK_NEXT')),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Space', () => inputModel.inputKey('VK_SPACE')),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _pcKeyBtn(translate('Select All'), () {
+                    bind.sessionInputKey(sessionId: sessionId, name: 'a', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
+                  }),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn(translate('Copy'), () {
+                    bind.sessionInputKey(sessionId: sessionId, name: 'c', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
+                  }),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn(translate('Paste'), () async {
+                    ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
+                    if (data != null && data.text != null && data.text!.isNotEmpty) {
+                      bind.sessionInputString(sessionId: sessionId, value: data.text!);
+                    } else {
+                      bind.sessionInputKey(sessionId: sessionId, name: 'v', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
+                    }
+                  }),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn(translate('Cut'), () {
+                    bind.sessionInputKey(sessionId: sessionId, name: 'x', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
+                  }),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Undo', () {
+                    bind.sessionInputKey(sessionId: sessionId, name: 'z', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
+                  }),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Alt+Tab', () {
+                    bind.sessionInputKey(sessionId: sessionId, name: 'Tab', down: false, press: true, alt: true, ctrl: false, shift: false, command: false);
+                  }),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Alt+F4', () {
+                    bind.sessionInputKey(sessionId: sessionId, name: 'F4', down: false, press: true, alt: true, ctrl: false, shift: false, command: false);
+                  }),
+                  const SizedBox(width: 6),
+                  _pcKeyBtn('Win+D', () {
+                    bind.sessionInputKey(sessionId: sessionId, name: 'd', down: false, press: true, alt: false, ctrl: false, shift: false, command: true);
+                  }),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pcKeyBtn(String label, VoidCallback onTap,
+      {bool active = false, double? width, IconData? icon}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        height: 36,
+        width: width,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF1A73E8) : const Color(0xFF2C2D32),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: active ? const Color(0xFF64B5F6) : Colors.white24,
+            width: 0.8,
+          ),
+          boxShadow: const [
+            BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1)),
+          ],
+        ),
+        child: icon != null
+            ? Icon(icon, color: Colors.white, size: 16)
+            : Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: active ? FontWeight.bold : FontWeight.w500,
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildSidePanelTab() {
+    return Positioned(
+      right: 0,
+      top: MediaQuery.of(context).size.height * 0.35,
+      child: GestureDetector(
+        onTap: () => setState(() => _sidePanelOpen = !_sidePanelOpen),
+        child: Container(
+          width: 28,
+          height: 52,
+          decoration: BoxDecoration(
+            color: const Color(0xE6202124),
+            borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
+            border: Border.all(color: Colors.white24, width: 0.6),
+            boxShadow: const [
+              BoxShadow(color: Colors.black45, blurRadius: 6, offset: Offset(-1, 2)),
+            ],
+          ),
+          child: Icon(
+            _sidePanelOpen ? Icons.chevron_right : Icons.chevron_left,
+            color: Colors.white,
+            size: 22,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSidePanel(BuildContext context) {
+    final width = MediaQuery.of(context).size.width * 0.85 > 320.0
+        ? 320.0
+        : MediaQuery.of(context).size.width * 0.85;
+    return Positioned(
+      right: 0,
+      top: 0,
+      bottom: 0,
+      width: width,
+      child: Material(
+        color: const Color(0xF218191E),
+        elevation: 12,
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'RustDesk',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70),
+                    onPressed: () => setState(() => _sidePanelOpen = false),
+                  ),
+                ],
+              ),
+              const Divider(color: Colors.white24),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD93025),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.power_settings_new),
+                label: Text(translate('Disconnect'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () => clientClose(sessionId, gFFI),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                activeColor: const Color(0xFF1A73E8),
+                title: Text(translate('Lock canvas'), style: const TextStyle(color: Colors.white, fontSize: 14)),
+                value: gFFI.canvasModel.locked,
+                onChanged: (val) {
+                  setState(() {
+                    gFFI.canvasModel.setLocked(val);
+                  });
+                },
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                activeColor: const Color(0xFF1A73E8),
+                title: Text(translate('Send text bar'), style: const TextStyle(color: Colors.white, fontSize: 14)),
+                value: _showQuickSendBar,
+                onChanged: (val) {
+                  setState(() {
+                    _showQuickSendBar = val;
+                  });
+                },
+              ),
+              const SizedBox(height: 6),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white,
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: Icon(
+                  gFFI.ffiModel.touchMode ? Icons.touch_app : Icons.mouse,
+                  size: 20,
+                ),
+                label: Text(gFFI.ffiModel.touchMode
+                    ? translate('Touch mode')
+                    : translate('Mouse mode')),
+                onPressed: () {
+                  setState(() {
+                    gFFI.ffiModel.toggleTouchMode();
+                  });
+                },
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white,
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: const Icon(Icons.fit_screen, size: 20),
+                label: Text(translate('Reset canvas')),
+                onPressed: () {
+                  gFFI.cursorModel.reset();
+                  gFFI.canvasModel.resetOffset();
+                },
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white,
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: const Icon(Icons.tv, size: 20),
+                label: Text(translate('Display options')),
+                onPressed: () {
+                  showOptions(context, widget.id, gFFI.dialogManager);
+                },
+              ),
+              if (gFFI.ffiModel.pi.displays.length > 1) ...[
+                const SizedBox(height: 10),
+                Text(translate('Displays'), style: const TextStyle(color: Colors.white60, fontSize: 13)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: List.generate(gFFI.ffiModel.pi.displays.length, (i) {
+                    final current = gFFI.ffiModel.pi.currentDisplay;
+                    final isCurrent = current == i;
+                    return InkWell(
+                      onTap: () {
+                        bind.sessionSwitchDisplay(
+                          isDesktop: isDesktop || isWebDesktop,
+                          sessionId: sessionId,
+                          value: Int32List.fromList([i]),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isCurrent ? const Color(0xFF1A73E8) : Colors.white12,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text('${translate("Display")} ${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                      ),
+                    );
+                  }),
+                ),
+              ],
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white,
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: const Icon(Icons.keyboard, size: 20),
+                label: Text(translate('Keyboard')),
+                onPressed: openKeyboard,
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white,
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: const Icon(Icons.paste, size: 20),
+                label: Text(translate('Send clipboard keystrokes')),
+                onPressed: () async {
+                  ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
+                  if (data != null && data.text != null && data.text!.isNotEmpty) {
+                    bind.sessionInputString(sessionId: sessionId, value: data.text!);
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white,
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: const Icon(Icons.folder_shared, size: 20),
+                label: Text(translate('Transfer file')),
+                onPressed: () {
+                  final token = bind.sessionGetConnToken(sessionId: sessionId);
+                  connect(context, widget.id, isFileTransfer: true, connToken: token);
+                },
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white,
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: const Icon(Icons.chat, size: 20),
+                label: Text(translate('Text chat')),
+                onPressed: () => onPressedTextChat(widget.id),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white,
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: const Icon(Icons.more_horiz, size: 20),
+                label: Text(translate('More actions')),
+                onPressed: () => showActions(widget.id),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white,
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: const Icon(Icons.help_outline, size: 20),
+                label: Text(translate('Gesture help')),
+                onPressed: () {
+                  setState(() {
+                    _sidePanelOpen = false;
+                    _showGestureHelp = !_showGestureHelp;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final keyboardIsVisible =
-        keyboardVisibilityController.isVisible && _showEdit;
-    final showActionButton = !_showBar || keyboardIsVisible || _showGestureHelp;
-
     return WillPopScope(
       onWillPop: () async {
         clientClose(sessionId, gFFI);
         return false;
       },
       child: Scaffold(
-          // workaround for https://github.com/rustdesk/rustdesk/issues/3131
-          floatingActionButtonLocation: keyboardIsVisible
-              ? FABLocation(FloatingActionButtonLocation.endFloat, 0, -35)
-              : null,
-          floatingActionButton: !showActionButton
-              ? null
-              : FloatingActionButton(
-                  mini: !keyboardIsVisible,
-                  child: Icon(
-                    (keyboardIsVisible || _showGestureHelp)
-                        ? Icons.expand_more
-                        : Icons.expand_less,
-                    color: Colors.white,
-                  ),
-                  backgroundColor: MyTheme.accent,
-                  onPressed: () {
-                    setState(() {
-                      if (keyboardIsVisible) {
-                        _showEdit = false;
-                        gFFI.invokeMethod("enable_soft_keyboard", false);
-                        _mobileFocusNode.unfocus();
-                        _physicalFocusNode.requestFocus();
-                      } else if (_showGestureHelp) {
-                        _showGestureHelp = false;
-                      } else {
-                        _showBar = !_showBar;
-                      }
-                    });
-                  }),
+          floatingActionButtonLocation: null,
+          floatingActionButton: null,
           bottomNavigationBar: Obx(() => Stack(
                 alignment: Alignment.bottomCenter,
                 children: [
                   gFFI.ffiModel.pi.isSet.isTrue &&
                           gFFI.ffiModel.waitForFirstImage.isTrue
-                      ? emptyOverlay(MyTheme.canvasColor)
+                      ? (isWeb ? const Offstage() : emptyOverlay(MyTheme.canvasColor))
                       : () {
                           gFFI.ffiModel.tryShowAndroidActionsOverlay();
-                          return Offstage();
+                          return const Offstage();
                         }(),
-                  _bottomWidget(),
-                  gFFI.ffiModel.pi.isSet.isFalse
+                  (!isWeb && gFFI.ffiModel.pi.isSet.isFalse)
                       ? emptyOverlay(MyTheme.canvasColor)
-                      : Offstage(),
+                      : const Offstage(),
+                  _bottomWidget(),
                 ],
               )),
           body: Obx(
             () => getRawPointerAndKeyBody(Overlay(
               initialEntries: [
                 OverlayEntry(builder: (context) {
-                  return Container(
-                    color: kColorCanvas,
-                    child: isWebDesktop
-                        ? getBodyForDesktopWithListener()
-                        : SafeArea(
-                            child:
-                                OrientationBuilder(builder: (ctx, orientation) {
-                              if (_currentOrientation != orientation) {
-                                Timer(const Duration(milliseconds: 200), () {
-                                  gFFI.dialogManager
-                                      .resetMobileActionsOverlay(ffi: gFFI);
-                                  _currentOrientation = orientation;
-                                  gFFI.canvasModel.updateViewStyle();
-                                });
-                              }
-                              return Container(
-                                color: MyTheme.canvasColor,
-                                child: inputModel.isPhysicalMouse.value
-                                    ? getBodyForMobile()
-                                    : RawTouchGestureDetectorRegion(
-                                        child: getBodyForMobile(),
-                                        ffi: gFFI,
-                                      ),
-                              );
-                            }),
-                          ),
+                  return Stack(
+                    children: [
+                      Container(
+                        color: kColorCanvas,
+                        child: isWebDesktop
+                            ? getBodyForDesktopWithListener()
+                            : SafeArea(
+                                child:
+                                    OrientationBuilder(builder: (ctx, orientation) {
+                                  if (_currentOrientation != orientation) {
+                                    Timer(const Duration(milliseconds: 200), () {
+                                      gFFI.dialogManager
+                                          .resetMobileActionsOverlay(ffi: gFFI);
+                                      _currentOrientation = orientation;
+                                      gFFI.canvasModel.updateViewStyle();
+                                    });
+                                  }
+                                  return Container(
+                                    color: MyTheme.canvasColor,
+                                    child: inputModel.isPhysicalMouse.value
+                                        ? getBodyForMobile()
+                                        : RawTouchGestureDetectorRegion(
+                                            child: getBodyForMobile(),
+                                            ffi: gFFI,
+                                          ),
+                                  );
+                                }),
+                              ),
+                      ),
+                      if (isWeb || isMobile) ...[
+                        _buildSidePanelTab(),
+                        if (_sidePanelOpen) _buildSidePanel(context),
+                      ],
+                    ],
                   );
                 })
               ],
@@ -575,7 +1238,19 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                         setState(() => _showEdit = false);
                         showOptions(context, widget.id, gFFI.dialogManager);
                       },
-                    )
+                    ),
+                    IconButton(
+                      color: _showQuickSendBar ? MyTheme.accent : Colors.white,
+                      icon: const Icon(Icons.text_fields),
+                      tooltip: translate('Quick send bar'),
+                      onPressed: () => setState(() => _showQuickSendBar = !_showQuickSendBar),
+                    ),
+                    IconButton(
+                      color: _sidePanelOpen ? MyTheme.accent : Colors.white,
+                      icon: const Icon(Icons.menu_open),
+                      tooltip: translate('Quick actions panel'),
+                      onPressed: () => setState(() => _sidePanelOpen = !_sidePanelOpen),
+                    ),
                   ] +
                   (isWebDesktop || ffiModel.viewOnly || !ffiModel.keyboard
                       ? []
@@ -607,7 +1282,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                               ),
                             ]) +
                   (isWeb
-                      ? []
+                      ? [
+                          IconButton(
+                            color: Colors.white,
+                            icon: const Icon(Icons.message),
+                            onPressed: () => onPressedTextChat(widget.id),
+                          ),
+                        ]
                       : <Widget>[
                           futureBuilder(
                               future: gFFI.invokeMethod(

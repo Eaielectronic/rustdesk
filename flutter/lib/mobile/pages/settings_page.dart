@@ -748,6 +748,16 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             ],
           ),
         SettingsSection(title: Text(translate("Settings")), tiles: [
+          if (isWeb)
+            SettingsTile.switchTile(
+              title: Text(translate('Force mobile mode')),
+              leading: Icon(Icons.phone_android),
+              initialValue: bind.mainGetLocalOption(key: 'web-force-mobile') == 'Y',
+              onToggle: (v) async {
+                await bind.mainSetLocalOption(key: 'web-force-mobile', value: v ? 'Y' : 'N');
+                setState(() {});
+              },
+            ),
           if (!disabledSettings && !_hideNetwork && !_hideServer)
             SettingsTile(
                 title: Text(translate('ID/Relay Server')),
