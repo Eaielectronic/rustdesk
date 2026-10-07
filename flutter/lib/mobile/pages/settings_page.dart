@@ -20,7 +20,7 @@ import '../../models/platform_model.dart';
 import '../widgets/deploy_dialog.dart';
 import '../widgets/dialog.dart';
 import 'home_page.dart';
-import 'scan_page.dart';
+import 'scan_page.dart' if (dart.library.html) 'scan_page_stub.dart';
 
 class SettingsPage extends StatefulWidget implements PageShape {
   @override
