@@ -1,0 +1,44 @@
+name: Deploy Flutter Web to GitHub Pages
+
+on:
+  # Se déclenche à chaque push sur la branche master
+  push:
+    branches:
+      - master
+    paths:
+      # S'active uniquement si le code source de Flutter ou ce fichier est modifié
+      - 'flutter/**'
+      - '.github/workflows/deploy_flutter_web.yml'
+  # Permet également de lancer l'action manuellement depuis GitHub
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Nécessaire pour autoriser l'action à faire un push sur gh-pages
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true # Accélère les builds suivants
+
+      - name: Téléchargement des dépendances
+        working-directory: ./flutter
+        run: flutter pub get
+
+      - name: Compilation de Flutter Web
+        working-directory: ./flutter
+        run: flutter build web --base-href "/rustdesk/"
+
+      - name: Déploiement sur GitHub Pages (branche gh-pages)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./flutter/build/web
+          publish_branch: gh-pages
