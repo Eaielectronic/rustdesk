@@ -107,13 +107,25 @@
         for (var name of names) caches.delete(name);
       });
     }
+    var bootStartAt = Date.now();
+    function bootLog(step, detail) {
+      var elapsed = Date.now() - bootStartAt;
+      if (detail === undefined) {
+        console.log('[RustDesk web boot +' + elapsed + 'ms] ' + step);
+      } else {
+        console.log('[RustDesk web boot +' + elapsed + 'ms] ' + step, detail);
+      }
+    }
+    bootLog('bootstrap script loaded');
     var scriptLoaded = false;
     var bootErrorShown = false;
     function showBootError(message) {
       if (bootErrorShown) {
+        bootLog('boot error ignored because one is already shown', message);
         return;
       }
       bootErrorShown = true;
+      bootLog('showing boot error', message);
       var loader = document.querySelector('.loading');
       if (loader) {
         loader.remove();
@@ -132,25 +144,43 @@
     }
     function loadMainDartJs() {
       if (scriptLoaded) {
+        bootLog('main.dart.js load skipped (already requested)');
         return;
       }
       scriptLoaded = true;
       var scriptTag = document.createElement('script');
       scriptTag.src = 'main.dart.js?v=' + Date.now();
       scriptTag.type = 'application/javascript';
+      scriptTag.onload = function () {
+        bootLog('main.dart.js loaded');
+      };
       scriptTag.onerror = function () {
+        bootLog('main.dart.js load failed', scriptTag.src);
         showBootError('Failed to load main.dart.js. Build the Flutter web app first and serve it over HTTP.');
       };
+      bootLog('requesting main.dart.js', scriptTag.src);
       document.body.append(scriptTag);
     }
     window.addEventListener('load', loadMainDartJs);
+    window.addEventListener('error', function (event) {
+      bootLog('window error', event.message || event.type);
+    });
+    window.addEventListener('unhandledrejection', function (event) {
+      bootLog('unhandled rejection', event.reason || 'unknown reason');
+    });
     setTimeout(loadMainDartJs, 1500);
     setTimeout(function () {
       if (!window._flutter && document.querySelector('.loading')) {
+        bootLog('startup timeout', {
+          hasFlutterObject: !!window._flutter,
+          hasInitFunction: !!window.init
+        });
         var message = window.init
           ? 'Web app startup timed out. Check browser console logs for startup errors.'
           : 'Web core assets are missing. Run the web JS build before opening this page.';
         showBootError(message);
+      } else {
+        bootLog('startup watchdog passed');
       }
     }, 15000);
   </script>
