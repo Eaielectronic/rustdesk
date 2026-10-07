@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout du dépôt
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Configuration de Flutter
         uses: subosito/flutter-action@v2
@@ -38,8 +40,8 @@ jobs:
       - name: Build Web JS bundle
         working-directory: ./flutter/web/js
         run: |
-          npm install
-          npm run build
+          yarn install
+          yarn build
 
       - name: Compilation de Flutter Web
         working-directory: ./flutter
