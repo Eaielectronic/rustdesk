@@ -32,6 +32,12 @@ jobs:
         working-directory: ./flutter
         run: flutter pub get
 
+      - name: Build Web JS bundle
+        working-directory: ./flutter/web/js
+        run: |
+          npm install
+          npm run build
+
       - name: Compilation de Flutter Web
         working-directory: ./flutter
         run: flutter build web --base-href "/rustdesk/"
