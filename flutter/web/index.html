@@ -107,19 +107,111 @@
         for (var name of names) caches.delete(name);
       });
     }
+    var bootStartAt = Date.now();
+    var bootLogs = [];
+    function bootLog(step, detail) {
+      var elapsed = Date.now() - bootStartAt;
+      var line = '[RustDesk web boot +' + elapsed + 'ms] ' + step;
+      if (detail !== undefined) {
+        try {
+          line += ' ' + (typeof detail === 'string' ? detail : JSON.stringify(detail));
+        } catch (_) { }
+      }
+      bootLogs.push(line);
+      if (bootLogs.length > 200) {
+        bootLogs.shift();
+      }
+      console.log(line);
+    }
+    bootLog('bootstrap script loaded');
     var scriptLoaded = false;
+    var bootErrorShown = false;
+    function showBootError(message) {
+      if (bootErrorShown) {
+        bootLog('boot error ignored because one is already shown', message);
+        return;
+      }
+      bootErrorShown = true;
+      bootLog('showing boot error', message);
+      var loader = document.querySelector('.loading');
+      if (loader) {
+        loader.remove();
+      }
+      var error = document.createElement('div');
+      error.style.position = 'absolute';
+      error.style.top = '50%';
+      error.style.left = '50%';
+      error.style.transform = 'translate(-50%, -50%)';
+      error.style.color = '#d93025';
+      error.style.maxWidth = '80vw';
+      error.style.fontFamily = 'sans-serif';
+      error.style.textAlign = 'center';
+      error.style.background = 'white';
+      error.style.padding = '12px';
+      error.style.border = '1px solid #f3c5c5';
+      error.style.borderRadius = '6px';
+      var title = document.createElement('div');
+      title.style.marginBottom = '8px';
+      title.textContent = message;
+      error.append(title);
+      var details = document.createElement('details');
+      details.open = true;
+      var summary = document.createElement('summary');
+      summary.textContent = 'Startup diagnostics';
+      summary.style.cursor = 'pointer';
+      details.append(summary);
+      var logs = document.createElement('pre');
+      logs.style.whiteSpace = 'pre-wrap';
+      logs.style.textAlign = 'left';
+      logs.style.marginTop = '8px';
+      logs.style.maxHeight = '40vh';
+      logs.style.overflow = 'auto';
+      logs.textContent = bootLogs.length > 0 ? bootLogs.join('\n') : 'No diagnostics captured.';
+      details.append(logs);
+      error.append(details);
+      document.body.append(error);
+    }
     function loadMainDartJs() {
       if (scriptLoaded) {
+        bootLog('main.dart.js load skipped (already requested)');
         return;
       }
       scriptLoaded = true;
       var scriptTag = document.createElement('script');
       scriptTag.src = 'main.dart.js?v=' + Date.now();
       scriptTag.type = 'application/javascript';
+      scriptTag.onload = function () {
+        bootLog('main.dart.js loaded');
+      };
+      scriptTag.onerror = function () {
+        bootLog('main.dart.js load failed', scriptTag.src);
+        showBootError('Failed to load main.dart.js. Build the Flutter web app first and serve it over HTTP.');
+      };
+      bootLog('requesting main.dart.js', scriptTag.src);
       document.body.append(scriptTag);
     }
     window.addEventListener('load', loadMainDartJs);
+    window.addEventListener('error', function (event) {
+      bootLog('window error', event.message || event.type);
+    });
+    window.addEventListener('unhandledrejection', function (event) {
+      bootLog('unhandled rejection', event.reason || 'unknown reason');
+    });
     setTimeout(loadMainDartJs, 1500);
+    setTimeout(function () {
+      if (!window._flutter && document.querySelector('.loading')) {
+        bootLog('startup timeout', {
+          hasFlutterObject: !!window._flutter,
+          hasInitFunction: !!window.init
+        });
+        var message = window.init
+          ? 'Web app startup timed out. Check browser console logs for startup errors.'
+          : 'Web core assets are missing. Run the web JS build before opening this page.';
+        showBootError(message);
+      } else {
+        bootLog('startup watchdog passed');
+      }
+    }, 15000);
   </script>
   <script src="libs/firebase-app.js?8.10.1"></script>
   <script src="libs/firebase-analytics.js?8.10.1"></script>
